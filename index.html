@@ -40,7 +40,7 @@ button { font-family: var(--font); -webkit-user-select: none; user-select: none;
 button:focus-visible { outline: 3px solid var(--sky); outline-offset: 3px; }
 
 .bubble { position: fixed; background: var(--paper); border-radius: 22px; box-shadow: 0 5px 0 var(--shadow); }
-.mission { top: calc(var(--gap) + env(safe-area-inset-top, 0px)); left: var(--gap); padding: 12px 18px 14px 14px; display: grid; gap: 8px; max-width: min(400px, calc(100vw - 2 * var(--gap) - 150px)); box-sizing: border-box; }
+.mission { top: calc(var(--gap) + env(safe-area-inset-top, 0px)); left: calc(var(--gap) + 54px + env(safe-area-inset-left, 0px)); padding: 12px 18px 14px 14px; display: grid; gap: 8px; max-width: min(400px, calc(100vw - 2 * var(--gap) - 204px)); box-sizing: border-box; }
 .m-head { display: flex; align-items: center; gap: 12px; }
 .m-ic { font-size: 46px; line-height: 1; }
 .m-title { font-size: 25px; font-weight: 700; line-height: 1.08; text-wrap: balance; }
@@ -99,6 +99,12 @@ button:focus-visible { outline: 3px solid var(--sky); outline-offset: 3px; }
 .toast .s { font-size: 16px; font-weight: 500; color: var(--ink-soft); margin-top: 3px; }
 #fade { position: fixed; inset: 0; background: var(--white); opacity: 0; pointer-events: none; transition: opacity 0.6s; }
 #fade.on { opacity: 1; }
+/* Home button: back to all games, top-left corner; the mission card sits to its right (below it on narrow phones) */
+#home { position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:calc(10px + env(safe-area-inset-left,0px));z-index:50;
+  width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:#2a2140;background:rgba(255,255,255,.82);
+  box-shadow:0 3px 0 rgba(0,0,0,.18);touch-action:manipulation;-webkit-tap-highlight-color:transparent;text-decoration:none }
+#home svg { width:24px;height:24px }
+#home:active { transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.18) }
 #showHud { position: fixed; right: var(--gap); bottom: calc(var(--gap) + env(safe-area-inset-bottom, 0px)); padding: 10px 16px; border: 0; border-radius: 20px; background: var(--paper); color: var(--ink); font-size: 16px; font-weight: 600; box-shadow: 0 5px 0 var(--shadow); cursor: pointer; }
 body.hud-off #hud { display: none; }
 
@@ -137,6 +143,9 @@ body.hud-off #hud { display: none; }
   .toast .t { font-size: 20px; }
   .toast .ic { font-size: 34px; }
 }
+@media (max-width: 520px) {
+  .mission { top: calc(var(--gap) + 54px + env(safe-area-inset-top, 0px)); left: var(--gap); max-width: calc(100vw - 2 * var(--gap) - 150px); }
+}
 @media (prefers-reduced-motion: reduce) {
   .ld-heli, .fuel.low { animation: none; }
   .toast { transition: opacity 0.2s; }
@@ -144,6 +153,7 @@ body.hud-off #hud { display: none; }
 </style>
 </head>
 <body>
+<a id="home" href="../index.html" aria-label="All games" title="All games"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11 12 4l8.5 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 9.8V20h12V9.8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/><path d="M10 20v-5.5h4V20" fill="currentColor"/></svg></a>
 <canvas id="view" tabindex="0" aria-label="Rescue helicopter flight view"></canvas>
 
 <div id="loading" role="status">

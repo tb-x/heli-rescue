@@ -6,6 +6,8 @@ Fly a rescue helicopter over a big world of farms, cities, forests, mountains an
 
 Buttons let you change the weather and the time of day, switch the camera, or let the robot pilot fly.
 
+- 🏠 in the corner goes back to the list of all games.
+
 **Play:** https://tb-x.github.io/heli-rescue/
 
 ## Running locally
