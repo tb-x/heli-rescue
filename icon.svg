@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7cc4f4"/><stop offset="1" stop-color="#c4e6fb"/></linearGradient>
+  </defs>
+  <rect width="180" height="180" fill="url(#bg)"/>
+  <circle cx="150" cy="30" r="18" fill="#ffb21f"/>
+  <g fill="#fff" opacity=".85"><ellipse cx="34" cy="30" rx="20" ry="8"/><ellipse cx="46" cy="24" rx="12" ry="8"/></g>
+  <!-- hills -->
+  <path d="M0 146 Q40 124 84 144 T180 136 V180 H0 Z" fill="#5fd07f"/>
+  <path d="M0 164 Q60 146 112 162 T180 158 V180 H0 Z" fill="#2fb35a"/>
+  <!-- rescue rope and ring -->
+  <path d="M100 112 V136" stroke="#8a5a2b" stroke-width="3"/>
+  <circle cx="100" cy="148" r="12" fill="none" stroke="#fff" stroke-width="7"/>
+  <circle cx="100" cy="148" r="12" fill="none" stroke="#ff4f84" stroke-width="7" stroke-dasharray="9.4 9.4"/>
+  <!-- the helicopter -->
+  <g stroke="#1f2a44" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M60 74 L20 64 L20 78 L60 94 Z" fill="#ff4f84"/>
+    <circle cx="20" cy="64" r="12" fill="none" stroke-width="3"/>
+    <path d="M12 56 L28 72 M28 56 L12 72" stroke-width="3"/>
+    <path d="M80 110 L76 122 M120 110 L124 122 M56 122 H140 Q148 122 150 114" fill="none" stroke-width="5"/>
+    <ellipse cx="100" cy="84" rx="44" ry="30" fill="#ff4f84"/>
+    <path d="M110 58 Q140 62 143 84 L112 86 Z" fill="#bfe8ff" stroke-width="3"/>
+    <rect x="96" y="44" width="8" height="12" fill="#1f2a44"/>
+    <rect x="28" y="38" width="144" height="7" rx="3.5" fill="#1f2a44"/>
+  </g>
+  <ellipse cx="82" cy="72" rx="12" ry="6" fill="#fff" opacity=".3"/>
+</svg>

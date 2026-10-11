@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Heli Rescue</title>
+<meta name="theme-color" content="#8cc8f0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="Heli Rescue">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap">
@@ -3120,6 +3128,16 @@ boot().catch((err) => {
   console.error(err);
   const el = $('err'); el.hidden = false; el.textContent = 'Something went wrong starting the game: ' + err.message;
 });
+</script>
+<script>
+// Offline support: sw.js caches this page. Once the page has loaded, send it every file the page used (fonts,
+// three.js) so those work offline too. Fails quietly where unsupported, e.g. on file://.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(() => navigator.serviceWorker.ready).then((reg) => {
+    const send = () => reg.active && reg.active.postMessage({ cache: [location.href, ...performance.getEntriesByType('resource').map((r) => r.name)] });
+    send(); setTimeout(send, 5000); setTimeout(send, 20000);
+  }).catch(() => {});
+}
 </script>
 </body>
 </html>
