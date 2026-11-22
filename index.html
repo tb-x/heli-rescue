@@ -2363,6 +2363,7 @@ function startMission(type, site) {
   game.mission = { type, ...site, x: cx / n, z: cz / n, n, ...built, homeBase: nearestBase(cx / n, cz / n), marker: makeMarker(PHASE_COL.go, '🆘'), t: 0 };
   game.recent.push(type.id); if (game.recent.length > 4) game.recent.shift();
   toast(type.ic, type.title, 'Follow the orange arrow 🆘');
+  audio.say('d-' + type.id, 2); audio.say('d-arrow');
 }
 function newMission() {
   const order = MISSION_TYPES.slice().sort(() => Math.random() - 0.5).sort((a, b) => game.recent.indexOf(a.id) - game.recent.indexOf(b.id));
@@ -2390,6 +2391,7 @@ function objective() {
 function goToBase(phase) {
   game.phase = phase;
   game.base = nearestBase(pilot.pos.x, pilot.pos.z);
+  game.nearSaid = false;
   setBaseMarker(PHASE_COL[phase]);
 }
 function outOfFuel() {
@@ -2441,6 +2443,11 @@ function updateGame(dt) {
         toast('⛽', 'Low fuel!', 'Fly to the rescue base to fill up');
         return;
       }
+      if (!m.near && dSite < NEAR_SITE) {
+        m.near = true;
+        audio.say(pick(['p-seethem', 'p-hangon'], Math.random), 0);
+        if (m.type.id === 'ship') audio.fx('horn');
+      }
       if (dSite < 32 && P.pos.y - Math.max(m.y, obstacleAt(m.x, m.z) - 8) < 80 && P.speed < 24) {
         game.phase = 'winch'; game.winch = { i: 0, stage: 'lower', t: 0 };
         toast('🪢', 'Hold steady!', 'Lifting everyone up');
@@ -2448,6 +2455,7 @@ function updateGame(dt) {
     }
     if ((ph === 'deliver' || ph === 'refuel') && game.base) {
       const dB = Math.hypot(game.base.x - P.pos.x, game.base.z - P.pos.z);
+      if (ph === 'deliver' && !game.nearSaid && dB < NEAR_BASE) { game.nearSaid = true; audio.say('p-nearly', 0); }
       if (dB < 34 && P.pos.y - game.base.y < 85 && P.speed < 26) { game.phase = 'land'; game.timer = 0; }
     }
   }
@@ -2465,7 +2473,12 @@ function updateGame(dt) {
       const hand = p.getWorldPosition(new THREE.Vector3());
       hand.y += 2.6;
       updateRope(_wp, hand.clone().lerp(_wp, 1 - Math.min(1, W.t / 1.0)));
-      if (W.t >= 1.0) { W.stage = 'lift'; W.t = 0; W.from = hand; p.userData.lifting = true; }
+      if (W.t >= 1.0) {
+        W.stage = 'lift'; W.t = 0; W.from = hand; p.userData.lifting = true;
+        audio.fx('clip'); audio.fx('winch', { dur: 2 });
+        if (m.type.biome === SEA) audio.fx('splash', { delay: 0.15 });
+        if (Math.random() < 0.35) audio.say('p-upyoucome', 0);
+      }
     } else {
       const k = Math.min(1, W.t / 2.0), pos = W.from.clone().lerp(_wp, k * k * (3 - 2 * k));
       m.g.worldToLocal(_pp.copy(pos).setY(pos.y - 2.6));
@@ -2474,6 +2487,7 @@ function updateGame(dt) {
       updateRope(_wp, pos);
       if (k >= 1) {
         p.visible = false; game.aboard++; W.i++; W.stage = 'lower'; W.t = 0;
+        if (W.i < m.n) { audio.say(pick(['p-gotone', 'p-gotyou', 'p-welcomeaboard'], Math.random), 0); audio.fx('winch', { dur: 1 }); }
         if (W.i >= m.n) {
           heli.rope.visible = false;
           m.emitters.forEach((e) => smoke.remove(e));
@@ -2739,10 +2753,50 @@ function updateCamera(dt) {
 }
 
 /* =====================================================================
-   Audio (optional, synthesised)
+   Audio (optional, switched on with the Sound button): synthesised
+   rotor, weather and chimes, plus recorded ElevenLabs clips in assets/
+   (voices and effects) with the synthesised sounds and the device
+   voice as fallback (e.g. on file://)
    ===================================================================== */
+const ASSET_V = 1;               // bump after replacing any file in assets/
+const VOICE_VOL = 1.6;           // spoken clips, into the master gain (0.5), so they sit over the rotor
+const SFX_VOL = 1;               // effect clips
+const CLIP_TRIM = {              // per-clip level trims, measured so the effects sit near the voices
+  'sfx/horn': 0.35, 'sfx/lowfuel': 0.4, 'sfx/cheer': 0.6, 'sfx/winch': 0.5, 'sfx/fuel': 1.4, 'sfx/squelch': 1.2,
+};
+const VOICE_WAIT = 4;            // seconds a waiting line may wait before it's dropped as out of date (important ones: twice that)
+const LOAD_WAIT = 1.5;           // seconds a line waits for its clip to finish decoding before the device voice reads it instead
+const NEAR_SITE = 160;           // metres from the rescue site where the pilot spots the people (and the ship sounds its horn)
+const NEAR_BASE = 220;           // metres from the base where the pilot says "Nearly there!" on the way to the hospital
+// Every voice clip and the words it says (the device voice reads these if a clip can't load).
+// d-* is the dispatcher on the radio (Jessica), p-* the pilot in the cockpit (Roger).
+const LINES = {
+  'd-ship': 'A ship is sinking!', 'd-swimmer': 'A swimmer needs help!', 'd-hikers': 'Hikers are stuck on the mountain!',
+  'd-skier': 'A skier is hurt in the snow!', 'd-campers': 'Campers lost in the forest!', 'd-roof': 'People stuck on a rooftop!',
+  'd-farmer': 'A farmer needs a doctor!', 'd-welcome': 'Welcome, rescue pilot! People need your help today.',
+  'd-newmission': 'New mission coming in!', 'd-arrow': 'Follow the orange arrow!',
+  'd-lowfuel': 'Low fuel! Fly to the rescue base to fill up.', 'd-outoffuel': 'Out of fuel! The tow team will bring you back to base.',
+  'd-complete': 'Rescue complete! Well done!', 'd-goodnight': 'Good night! The searchlight is on.',
+  'd-goodmorning': 'Good morning! The sun is up.', 'd-rain': 'Here comes the rain!', 'd-storm': 'Thunderstorm! Hold on!',
+  'd-snow': "It's snowing!",
+  'p-takeoff': 'Taking off! Up we go!', 'p-seethem': 'I can see them!', 'p-hangon': "Hang on tight, we're coming!",
+  'p-hold': 'Hold steady! Lifting everyone up.', 'p-gotone': 'Got one!', 'p-gotyou': 'Got you!', 'p-upyoucome': 'Up you come!',
+  'p-welcomeaboard': 'Welcome aboard!', 'p-aboard': "Everyone is on board! Let's fly them to the hospital.",
+  'p-nearly': 'Nearly there!', 'p-landing': 'Landing now.', 'p-hooray': 'Hooray! Everyone is safe!',
+  'p-refill': 'Filling up the tank.', 'p-full': "Tank is full! Let's go!", 'p-great': 'Great flying!',
+  'p-robot': 'Robot pilot is flying. Press the arrows any time to take over.', 'p-you': "You're the pilot! Steer with the arrows.",
+};
+const SFX_CLIPS = ['winch', 'clip', 'splash', 'cheer', 'fuel', 'horn', 'lowfuel', 'squelch'];
+const WX_LINE = { rain: 'd-rain', storm: 'd-storm', snow: 'd-snow' };   // other weather changes only show their card
+const clipRaw = {}, clipBuf = {}, clipState = {};   // bytes start loading now; decoding needs the AudioContext from the Sound tap
+for (const n of [...Object.keys(LINES).map((k) => 'voice/' + k), ...SFX_CLIPS.map((k) => 'sfx/' + k)]) {
+  clipState[n] = 'loading';
+  clipRaw[n] = fetch(`assets/${n}.mp3?v=${ASSET_V}`).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
+}
+
 const audio = {
-  ctx: null, nodes: null,
+  ctx: null, nodes: null, on: false, welcomed: false,
+  voiceQ: [], voiceSrc: null, voiceEnd: 0, radioEnd: 0,
   start() {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), d = buf.getChannelData(0);
@@ -2759,12 +2813,86 @@ const audio = {
     const windF = ctx.createBiquadFilter(); windF.type = 'bandpass'; windF.frequency.value = 340; windF.Q.value = 0.6;
     const windG = ctx.createGain(); windG.gain.value = 0; noise().connect(windF); windF.connect(windG); windG.connect(master);
     this.ctx = ctx; this.nodes = { master, rainG, windG, buf };
+    for (const n in clipRaw) {
+      clipRaw[n].then((b) => b && new Promise((res, rej) => ctx.decodeAudioData(b, res, rej)))
+        .then((d) => { if (d) clipBuf[n] = d; clipState[n] = d ? 'ok' : 'fail'; }).catch(() => { clipState[n] = 'fail'; });
+    }
   },
   update() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime, n = this.nodes;
     n.rainG.gain.setTargetAtTime(wx.rainEff * 0.22, t, 0.5);
     n.windG.gain.setTargetAtTime(wx.cur.wind * 0.12 + wx.snowEff * 0.03, t, 0.5);
+    this.pumpVoice();
+  },
+  // Plays a recorded effect (`dur` cuts it short with a quick fade); false if it isn't loaded, so the caller can synthesise.
+  fx(name, { dur = 0, delay = 0 } = {}) {
+    const ctx = this.ctx, buf = clipBuf['sfx/' + name];
+    if (!ctx || !buf || ctx.state !== 'running') return false;
+    this.playBuf(buf, SFX_VOL * (CLIP_TRIM['sfx/' + name] ?? 1), ctx.currentTime + delay, dur);
+    return true;
+  },
+  playBuf(buf, vol, t0, dur = 0) {
+    const ctx = this.ctx, s = ctx.createBufferSource(), g = ctx.createGain();
+    s.buffer = buf; g.gain.setValueAtTime(vol, 0);
+    s.connect(g); g.connect(this.nodes.master); s.start(t0);
+    if (dur && dur < buf.duration) { g.gain.setValueAtTime(vol, t0 + dur - 0.12); g.gain.linearRampToValueAtTime(0.0001, t0 + dur); s.stop(t0 + dur + 0.02); }
+    return s;
+  },
+  // Voice lines wait their turn, so two never talk at once. prio 0: only when nobody is talking or waiting (chatter,
+  // weather); 1: waits in line (dropped after VOICE_WAIT s); 2: goes to the front and clears the waiting chatter (mission
+  // calls, fuel). A line already waiting isn't queued twice.
+  say(name, prio = 1) {
+    if (!this.on || !LINES[name]) return;
+    if (prio === 0 && (this.speaking() || this.voiceQ.length)) return;
+    if (prio === 2) this.voiceQ = this.voiceQ.filter((q) => q.prio === 2);
+    if (this.voiceQ.some((q) => q.name === name)) return;
+    const item = { name, prio, t: performance.now() / 1000 };
+    const i = prio === 2 ? this.voiceQ.findIndex((q) => q.prio < 2) : -1;
+    if (i >= 0) this.voiceQ.splice(i, 0, item); else this.voiceQ.push(item);
+  },
+  unsay(...names) { this.voiceQ = this.voiceQ.filter((q) => !names.includes(q.name)); },
+  speaking() {
+    return (this.ctx && this.voiceEnd > this.ctx.currentTime) || !!(window.speechSynthesis && speechSynthesis.speaking);
+  },
+  hush() {
+    this.voiceQ = [];
+    if (this.voiceSrc) { try { this.voiceSrc.stop(); } catch (err) { /* already stopped */ } this.voiceSrc = null; }
+    this.voiceEnd = 0;
+    try { speechSynthesis.cancel(); } catch (err) { /* no device voice */ }
+  },
+  pumpVoice() {
+    const ctx = this.ctx;
+    if (!this.on || ctx.state !== 'running' || this.speaking()) return;
+    const now = performance.now() / 1000;
+    while (this.voiceQ.length && now - this.voiceQ[0].t > VOICE_WAIT * (this.voiceQ[0].prio === 2 ? 2 : 1)) this.voiceQ.shift();
+    const q = this.voiceQ[0];
+    if (!q) return;
+    const key = 'voice/' + q.name;
+    if (clipState[key] === 'loading' && now - q.t < LOAD_WAIT) return;   // give the clip a moment to decode
+    this.voiceQ.shift();
+    const radio = q.name.startsWith('d-');
+    let t0 = ctx.currentTime;
+    // The dispatcher's lines come over the radio: a squelch blip first, unless she has only just stopped talking.
+    if (radio && t0 > this.radioEnd + 0.6 && this.fx('squelch')) t0 += 0.3;
+    const buf = clipBuf[key];
+    if (buf) {
+      this.voiceSrc = this.playBuf(buf, VOICE_VOL, t0);
+      this.voiceEnd = t0 + buf.duration + 0.15;
+      if (radio) this.radioEnd = this.voiceEnd;
+    } else this.speakFallback(q.name);
+  },
+  speakFallback(name) {
+    const ss = window.speechSynthesis;
+    if (!ss) return;
+    try {
+      const u = new SpeechSynthesisUtterance(LINES[name]);
+      const en = ss.getVoices().filter((v) => /^en/i.test(v.lang));
+      const want = name.startsWith('d-') ? /female|samantha|zira|aria|jenny|google us/i : /\bmale\b|david|daniel|guy|george|ryan/i;
+      u.voice = en.find((v) => want.test(v.name)) || en[0] || null;
+      u.lang = 'en-US'; u.rate = 1.05; u.volume = 1;
+      ss.speak(u);
+    } catch (err) { /* no device voice */ }
   },
   thunder(delay, power) {
     const ctx = this.ctx, t0 = ctx.currentTime + delay;
@@ -2977,6 +3105,7 @@ function toggleRobot() {
   $('btnBot').classList.toggle('off', !game.robot);
   if (game.robot) toast('🤖', 'Robot pilot is flying', 'Press the arrows any time to take over');
   else toast('🕹️', "You're the pilot!", 'Steer with the arrows, go up and down too');
+  audio.unsay('p-robot', 'p-you'); audio.say(game.robot ? 'p-robot' : 'p-you');
 }
 $('btnBot').addEventListener('click', toggleRobot);
 $('btnCam').addEventListener('click', cycleCam);
@@ -2985,7 +3114,9 @@ $('showHud').addEventListener('click', toggleHud);
 $('btnSnd').addEventListener('click', () => {
   if (!audio.ctx) { try { audio.start(); } catch (err) { $('icSnd').textContent = '🚫'; return; } }
   const on = !$('btnSnd').classList.contains('on');
-  if (on) audio.ctx.resume(); else audio.ctx.suspend();
+  if (on) audio.ctx.resume(); else { audio.hush(); audio.ctx.suspend(); }
+  audio.on = on;
+  if (on && !audio.welcomed) { audio.welcomed = true; audio.say('d-welcome', 2); }
   $('btnSnd').classList.toggle('on', on);
   $('icSnd').textContent = on ? '🔊' : '🔇';
 });
@@ -3053,6 +3184,18 @@ function frame(now) {
   if (dt > 0) tick(dt);
   requestAnimationFrame(frame);
 }
+// Voices and effects when the game moves to a new phase (the lines inside a phase are in updateGame).
+function phaseSounds(ph, prev, rescued) {
+  if (ph === 'start' && prev === 'refill') { audio.say('p-full', 0); audio.say('d-newmission'); }
+  // (taking off for a new mission, the dispatcher's call is talking, so this is mostly heard going back to a mission after refuelling)
+  else if (ph === 'takeoff') audio.say(prev === 'refill' ? pick(['p-full', 'p-takeoff'], Math.random) : 'p-takeoff', 0);
+  else if (ph === 'refuel') { audio.fx('lowfuel'); audio.say('d-lowfuel', 2); }
+  else if (ph === 'fade') audio.say('d-outoffuel', 2);
+  else if (ph === 'winch') { audio.say('p-hold'); audio.fx('winch', { dur: 1 }); }
+  else if (ph === 'deliver') audio.say('p-aboard');
+  else if (ph === 'land') audio.say('p-landing', 0);
+  else if (ph === 'refill') { audio.fx('fuel', { delay: rescued ? 1.2 : 0 }); audio.say(rescued ? pick(['d-complete', 'p-hooray', 'p-great'], Math.random) : 'p-refill', rescued ? 1 : 0); }
+}
 function tick(dt) {
   simTime += dt;
   updateWeather(dt);
@@ -3066,16 +3209,17 @@ function tick(dt) {
   birds.update(dt, simTime);
   smoke.update(dt, env.light);
   audio.update();
-  if (wx.key !== seen.wx) { seen.wx = wx.key; toast(WX_KID[wx.key][0], WX_SAY[wx.key], '', true); }
+  if (wx.key !== seen.wx) { seen.wx = wx.key; toast(WX_KID[wx.key][0], WX_SAY[wx.key], '', true); if (WX_LINE[wx.key]) audio.say(WX_LINE[wx.key], 0); }
   const isNight = env.night > 0.6;
   if (isNight !== seen.night && (isNight || env.night < 0.3)) {
     seen.night = isNight;
-    if (isNight) toast('🌙', 'Good night!', 'The searchlight is on', true);
-    else toast('🌅', 'Good morning!', 'The sun is up', true);
+    if (isNight) { toast('🌙', 'Good night!', 'The searchlight is on', true); audio.say('d-goodnight', 0); }
+    else { toast('🌅', 'Good morning!', 'The sun is up', true); audio.say('d-goodmorning', 0); }
   }
   if (game.phase !== seen.phase) {
     if (game.phase === 'deliver') audio.chime([659, 784]);
-    if (game.saved !== seen.saved) audio.chime();
+    if (game.saved !== seen.saved && !audio.fx('cheer')) audio.chime();
+    phaseSounds(game.phase, seen.phase, game.saved !== seen.saved);
     seen.phase = game.phase; seen.saved = game.saved;
   }
   hudT -= dt; mapT -= dt;
@@ -3097,7 +3241,7 @@ function tick(dt) {
 }
 
 // Console handle for tinkering: heliSim.tod.h = 22; heliSim.wx.mode = 'storm'; heliSim.game.fuel = 10
-window.heliSim = { tod, wx, cam, pilot, world, game, seed: SEED, step: (n = 1, dt = 1 / 30) => { for (let i = 0; i < n; i++) tick(dt); } };
+window.heliSim = { tod, wx, cam, pilot, world, game, audio, seed: SEED, step: (n = 1, dt = 1 / 30) => { for (let i = 0; i < n; i++) tick(dt); } };
 
 async function boot() {
   TURB_YAW = Math.random() * TAU;
